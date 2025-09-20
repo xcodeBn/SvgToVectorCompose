@@ -1,0 +1,9 @@
+{
+    "input": "./svg_icons",
+    "output": "./compose_icons",
+    "package": "com.myapp.icons",
+    "generate_index": true,
+    "iconpack_name": "MyIcons",
+    "verbose": false,
+    "clean": true
+}

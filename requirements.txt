@@ -1,0 +1,12 @@
+# SVG to Compose Vector Drawable Converter
+# Python 3.8+ required
+
+# Core dependencies - using only standard library modules
+# No external dependencies required for basic functionality
+
+# Optional dependencies for enhanced features:
+# lxml>=4.9.0          # For advanced XML parsing (fallback to xml.etree.ElementTree)
+# colorama>=0.4.6      # For colored terminal output
+# tqdm>=4.64.0         # For progress bars
+# pytest>=7.0.0        # For running tests
+# black>=22.0.0        # For code formatting
