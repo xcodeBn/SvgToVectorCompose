@@ -182,23 +182,6 @@ fun Toolbar() {
 }
 ```
 
-## 🏗️ Real-World Example: IntelliJ Icons Library
-
-This tool was used to create a complete IntelliJ Icons library for Compose Multiplatform:
-
-```bash
-# Convert 8,000+ IntelliJ icons
-python main.py \
-  -i "/path/to/intellij-icons" \
-  -o "./IntellijIconsLibrary" \
-  -p "com.github.xcodebn.intellijicons" \
-  --generate-index \
-  --iconpack-name "IntellijIcons" \
-  --clean
-```
-
-**Result**: 8,080 perfectly converted Kotlin files with 100% success rate!
-
 ## 🔧 Advanced Features
 
 ### Smart File Naming
@@ -298,27 +281,11 @@ We welcome contributions! Here's how you can help:
 - 🧪 **Testing**: Add test frameworks and edge cases
 - 🚀 **Performance**: Optimize conversion speed
 
-## 📝 Changelog
-
-### v1.0.0 (Latest)
-- ✨ Complete SVG to Compose conversion
-- 🎯 IconPack generation with customizable names
-- 📦 Proper package structure from directory hierarchy
-- 🎨 Smart filename normalization
-- 🔧 Interactive mode and config file support
-- 📊 Real-time progress tracking
-- 🧪 100% success rate on complex icon sets
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
-
-- **JetBrains** for the amazing IntelliJ icons used in testing
-- **Google** for Compose Multiplatform
-- **Material Design** for icon design inspiration
-- **Python community** for excellent XML and file processing libraries
 
 ---
 
