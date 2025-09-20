@@ -1,300 +1,134 @@
-# SvgToVectorCompose
+# SVG to Compose Converter
 
-<div align="center">
+**🎨 Convert SVG files to Kotlin Compose ImageVector code**
 
-![Python](https://img.shields.io/badge/python-v3.8+-blue.svg)
-![Kotlin](https://img.shields.io/badge/kotlin-multiplatform-purple.svg)
-![Compose](https://img.shields.io/badge/compose-multiplatform-green.svg)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-
-**🎨 Convert SVG files to Kotlin Compose Multiplatform ImageVector code**
-
-A powerful Python tool that transforms SVG icons into production-ready Compose Vector Drawables with perfect package structure and IconPack generation.
-
-[Features](#features) • [Installation](#installation) • [Usage](#usage) • [Examples](#examples) • [Contributing](#contributing)
-
-</div>
+A simple Python tool that transforms SVG icons into Compose Vector Drawables with proper package structure and IconPack generation.
 
 ---
 
-## 🌟 Features
-
-- **🎯 High Success Rate**: 100% conversion success on complex SVG icons (tested on 8,000+ IntelliJ icons)
-- **🔄 Batch Processing**: Convert entire directories of SVG files while preserving folder structure
-- **📦 Smart Package Management**: Auto-generates proper Kotlin package names from directory structure
-- **🏗️ IconPack Generation**: Creates convenient IconPack objects for easy icon access (`MyIcons.ArrowLeft`)
-- **🎨 Intelligent Naming**: Converts filenames to PascalCase with Kotlin keyword protection
-- **📊 Real-time Progress**: Live conversion progress with detailed logging
-- **⚙️ Flexible Configuration**: CLI arguments, interactive mode, or JSON config files
-- **🔧 Production Ready**: Generates proper Kotlin Multiplatform compatible code
-
 ## 🚀 Quick Start
 
-### Installation
-
+**1. Clone and install:**
 ```bash
 git clone https://github.com/xcodebn/SvgToVectorCompose.git
 cd SvgToVectorCompose
 pip install -r requirements.txt
 ```
 
-### Basic Usage
-
+**2. Convert your SVGs:**
 ```bash
-# Interactive mode (recommended for first-time users)
-python main.py --interactive
-
-# Direct conversion
 python main.py -i ./svg_icons -o ./compose_icons -p com.myapp.icons --generate-index
-
-# With custom IconPack name
-python main.py -i ./icons -o ./output -p com.app.icons --generate-index --iconpack-name "AppIcons"
 ```
 
-## 📖 Detailed Usage
+**3. Use in your Compose project:**
+```kotlin
+Icon(imageVector = MyIcons.ArrowLeft, contentDescription = "Back")
+```
 
 ### Command Line Options
 
 ```bash
 python main.py [OPTIONS]
 
-Options:
+Required:
   -i, --input PATH              Input directory containing SVG files
   -o, --output PATH             Output directory for generated Kotlin files
-  -p, --package PACKAGE         Package name for generated Kotlin files
-  --generate-index              Generate IconPack file for easy icon access
-  --iconpack-name NAME          Custom name for IconPack object (default: Icons)
-  --clean                       Clean output directory before conversion
-  --dry-run                     Preview conversion without writing files
-  --verbose                     Enable detailed logging
-  --interactive                 Interactive mode with guided setup
-  --config CONFIG               Load configuration from JSON file
+  -p, --package PACKAGE         Package name (e.g., com.myapp.icons)
+
+Optional:
+  --generate-index              Generate IconPack file for easy access
+  --iconpack-name NAME          Custom IconPack name (default: Icons)  
+  --verbose                     Show detailed conversion progress
+  --clean                       Clean output directory first
+  --interactive                 Interactive mode for beginners
 ```
 
-### Configuration File
+### Examples
 
-Create a `config.json` file for repeated usage:
-
-```json
-{
-    "input": "./svg_icons",
-    "output": "./compose_icons",
-    "package": "com.myapp.icons",
-    "generate_index": true,
-    "iconpack_name": "MyIcons",
-    "verbose": false,
-    "clean": true
-}
-```
-
-Then run: `python main.py --config config.json`
-
-## 💡 Examples
-
-### Quick Examples
-
-Try the included examples to see SvgToVectorCompose in action:
-
+**Basic conversion:**
 ```bash
-# Run basic conversion example
-cd examples
-python basic_conversion.py
-
-# Try configuration-based conversion
-python config_based_conversion.py
-
-# Launch interactive demo
-python interactive_demo.py
+python main.py -i ./icons -o ./output -p com.app.icons
 ```
 
-See the [examples directory](examples/README.md) for detailed demonstrations and sample code.
+**With IconPack generation:**
+```bash
+python main.py -i ./icons -o ./output -p com.app.icons --generate-index --iconpack-name "AppIcons"
+```
 
-### Input Structure
+**Interactive mode:**
+```bash
+python main.py --interactive
+```
+
+## 📁 File Structure
+
+**Input:**
 ```
 svg_icons/
 ├── actions/
 │   ├── edit.svg
-│   ├── delete.svg
-│   └── save.svg
+│   └── delete.svg
 ├── navigation/
-│   ├── arrow-left.svg
-│   └── home.svg
+│   └── arrow-left.svg
 └── logo.svg
 ```
 
-### Generated Output
+**Generated Output:**
 ```
 compose_icons/
-├── MyIcons.kt                    # IconPack file
+├── MyIcons.kt                    # IconPack (if --generate-index used)
 ├── actions/
 │   ├── Edit.kt
-│   ├── Delete.kt
-│   └── Save.kt
+│   └── Delete.kt
 ├── navigation/
-│   ├── ArrowLeft.kt
-│   └── Home.kt
+│   └── ArrowLeft.kt
 └── Logo.kt
 ```
 
-### Generated IconPack Usage
+## 🎯 Using Generated Icons
 
+**With IconPack:**
 ```kotlin
-import com.myapp.icons.MyIcons
+// Easy access to any icon
+Icon(imageVector = MyIcons.ArrowLeft, contentDescription = "Back")
 
-@Composable
-fun MyApp() {
-    // Easy access to any icon
-    Icon(
-        imageVector = MyIcons.ArrowLeft,
-        contentDescription = "Navigate back"
-    )
-    
-    // Browse all icons
-    LazyRow {
-        items(MyIcons.All) { icon ->
-            Icon(imageVector = icon, contentDescription = null)
-        }
-    }
-    
-    // Dynamic icon access
-    val icon = MyIcons.getByName("Edit")
-    if (icon != null) {
-        Icon(imageVector = icon, contentDescription = "Edit")
+// Browse all available icons  
+LazyRow {
+    items(MyIcons.All) { icon ->
+        Icon(imageVector = icon, contentDescription = null)
     }
 }
+
+// Get icon by name
+val editIcon = MyIcons.getByName("Edit")
 ```
 
-### Individual Icon Usage
-
+**Direct imports:**
 ```kotlin
 import com.myapp.icons.actions.Edit
 import com.myapp.icons.navigation.ArrowLeft
 
-@Composable
-fun Toolbar() {
-    IconButton(onClick = { /* edit action */ }) {
-        Icon(imageVector = Edit, contentDescription = "Edit")
-    }
-    
-    IconButton(onClick = { /* back action */ }) {
-        Icon(imageVector = ArrowLeft, contentDescription = "Back")
-    }
-}
+Icon(imageVector = Edit, contentDescription = "Edit")
+Icon(imageVector = ArrowLeft, contentDescription = "Back")
 ```
 
-## 🔧 Advanced Features
+## ⚠️ Important Notes
 
-### Smart File Naming
+**Large SVG Files:**
+Some very complex SVG files with thousands of path commands may cause JVM method size limit errors during compilation. If you encounter "Method too large" errors, consider:
+- Simplifying the SVG in a graphics editor
+- Splitting complex icons into multiple simpler icons
+- Excluding problematic files from conversion
 
-The converter intelligently handles edge cases:
-
-```bash
-# Input filename        → Output filename     → Variable name
-arrow-left.svg         → ArrowLeft.kt        → ArrowLeft
-123icon.svg           → Icon123icon.kt      → Icon123icon  
-class.svg             → ClassIcon.kt        → ClassIcon
-icon@2x.svg           → Icon2x.kt           → Icon2x
-multi-word-icon.svg   → MultiWordIcon.kt    → MultiWordIcon
-```
-
-### Package Structure
-
-Directory structure is preserved in package names:
-
-```bash
-# Directory: icons/actions/edit.svg
-# Package: com.myapp.icons.actions
-# File: icons/actions/Edit.kt
-```
-
-### Complex SVG Support
-
-Handles advanced SVG features:
-- ✅ Path elements with complex commands
-- ✅ Polygon and polyline elements  
-- ✅ CSS class styles and inline styles
-- ✅ Nested groups and transformations
-- ✅ Multiple color formats (hex, named, rgb)
-- ✅ ViewBox and dimension handling
-
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-SvgToVectorCompose/
-├── main.py                      # CLI entry point
-├── converter/                   # Core conversion logic
-│   ├── __init__.py             # Package initialization
-│   ├── svg_parser.py           # SVG parsing with advanced features
-│   ├── compose_generator.py    # Kotlin code generation
-│   └── file_processor.py       # File operations and IconPack generation
-├── examples/                    # Usage examples and demos
-│   ├── README.md               # Examples documentation
-│   ├── input/icons/            # Sample SVG files
-│   ├── basic_conversion.py     # Basic usage example
-│   ├── config_based_conversion.py # Config file example
-│   └── interactive_demo.py     # Interactive mode demo
-├── templates/                   # Kotlin code templates
-│   └── compose_template.kt     # Template for generated Kotlin files
-├── .github/workflows/          # GitHub Actions CI/CD
-│   └── test.yml               # Automated testing workflow
-├── config.example.json         # Example configuration file
-├── requirements.txt            # Python dependencies
-├── .gitignore                  # Git ignore rules
-├── CONTRIBUTING.md             # Contribution guidelines
-├── README.md                   # This file
-└── LICENSE                     # MIT license
-```
-
-### Getting Started
-
-```bash
-# Clone the repository
-git clone https://github.com/xcodebn/SvgToVectorCompose.git
-cd SvgToVectorCompose
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the converter
-python main.py --interactive
-```
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how you can help:
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make your changes** and test thoroughly
-4. **Commit your changes**: `git commit -m 'Add amazing feature'`
-5. **Push to the branch**: `git push origin feature/amazing-feature`
-6. **Open a Pull Request**
-
-### Contribution Ideas
-
-- 🐛 **Bug fixes**: Report and fix conversion issues
-- 🎨 **New features**: SVG filters, animations support
-- 📖 **Documentation**: Improve guides and examples
-- 🧪 **Testing**: Add test frameworks and edge cases
-- 🚀 **Performance**: Optimize conversion speed
-
+**File Naming:**
+- Files are converted to PascalCase: `arrow-left.svg` → `ArrowLeft.kt`
+- Numbers at start get "Icon" prefix: `123icon.svg` → `Icon123icon.kt`
+- Directory names become package names: `actions/` → `com.app.icons.actions`
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
+MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-<div align="center">
-
-**Made with ❤️ by [xcodebn](https://github.com/xcodebn)**
-
-⭐ **Star this repo if it helped you!** ⭐
-
-[Report Bug](https://github.com/xcodebn/SvgToVectorCompose/issues) • [Request Feature](https://github.com/xcodebn/SvgToVectorCompose/issues) • [Discussion](https://github.com/xcodebn/SvgToVectorCompose/discussions)
-
-</div>
+**Made with ❤️ for the Compose community**

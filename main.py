@@ -197,46 +197,62 @@ class SVGToComposeConverter:
         icon_data = []
         
         for file_path in output_files:
-            # Extract icon name from filename (should match the PascalCase conversion)
-            icon_name = file_path.stem  # This should already be PascalCase
+            # Extract the original SVG filename to get the proper variable name
+            # We need to read the actual variable name from the generated file
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # Find the variable name: look for "val VariableName: ImageVector"
+                    import re
+                    match = re.search(r'val (\w+): ImageVector', content)
+                    if match:
+                        actual_variable_name = match.group(1)
+                    else:
+                        # Fallback to filename if pattern not found
+                        actual_variable_name = file_path.stem
+            except Exception:
+                # Fallback to filename if reading fails
+                actual_variable_name = file_path.stem
             
             # Store relative path for nested structure
             relative_path = file_path.relative_to(self.config.output_dir)
             icon_data.append({
-                'name': icon_name,
+                'name': actual_variable_name,
                 'path': relative_path,
-                'variable_name': icon_name  # Since filename now matches variable name
+                'variable_name': actual_variable_name
             })
         
         # Sort by icon name
         icon_data.sort(key=lambda x: x['name'])
         
-        # Generate imports for all icons with correct package paths
-        imports = []
+        # Handle duplicate names by adding directory suffix
+        icon_data = self._resolve_duplicate_names(icon_data)
+        
+        # No imports needed since we're using fully qualified names
+        
+        # Generate individual icon properties using fully qualified names to avoid loops
+        icon_properties = []
         for icon in icon_data:
             # Build full package name including directory structure
             icon_package = self.generator._build_package_name(str(icon['path']))
-            imports.append(f"import {icon_package}.{icon['variable_name']}")
+            icon_properties.append(f"    val {icon['name']}: ImageVector get() = {icon_package}.{icon['variable_name']}")
         
-        # Generate individual icon properties
-        icon_properties = []
+        # Generate icon list using fully qualified names
+        icon_list_items = []
         for icon in icon_data:
-            icon_properties.append(f"    val {icon['name']}: ImageVector get() = {icon['variable_name']}")
+            icon_package = self.generator._build_package_name(str(icon['path']))
+            icon_list_items.append(f"{icon_package}.{icon['variable_name']}")
         
-        # Generate icon list
-        icon_list_items = [icon['variable_name'] for icon in icon_data]
-        
-        # Generate when clauses for getByName function
+        # Generate when clauses for getByName function using fully qualified names
         when_clauses = []
         for icon in icon_data:
-            when_clauses.append(f'        "{icon["name"]}" -> {icon["variable_name"]}')
+            icon_package = self.generator._build_package_name(str(icon['path']))
+            when_clauses.append(f'        "{icon["name"]}" -> {icon_package}.{icon["variable_name"]}')
         
         # Build the content string step by step to avoid f-string issues
         header = f"""package {self.config.package_name}
 
 import androidx.compose.ui.graphics.vector.ImageVector
-
-{chr(10).join(imports)}
 
 /**
  * IconPack containing all converted SVG icons.
@@ -277,6 +293,43 @@ object {self.config.iconpack_name} {{"""
 
         iconpack_content = header + chr(10) + properties_section + list_section + function_section
         return iconpack_content
+
+    def _resolve_duplicate_names(self, icon_data: list) -> list:
+        """Resolve duplicate icon names by adding directory suffix."""
+        # Group icons by name to find duplicates
+        name_groups = {}
+        for icon in icon_data:
+            name = icon['name']
+            if name not in name_groups:
+                name_groups[name] = []
+            name_groups[name].append(icon)
+        
+        # Process each group
+        resolved_icons = []
+        for name, icons in name_groups.items():
+            if len(icons) == 1:
+                # No duplicates, keep original
+                resolved_icons.append(icons[0])
+            else:
+                # Handle duplicates by adding directory suffix
+                for icon in icons:
+                    # Get the immediate parent directory name
+                    path_parts = icon['path'].parts
+                    if len(path_parts) > 1:
+                        # Get the directory name (second to last part, since last is filename)
+                        dir_name = path_parts[-2]
+                        # Capitalize first letter for consistent naming
+                        dir_suffix = dir_name.capitalize()
+                        new_name = f"{name}{dir_suffix}"
+                    else:
+                        # Fallback if no directory
+                        new_name = f"{name}Root"
+                    
+                    # Update the icon data
+                    icon['name'] = new_name
+                    resolved_icons.append(icon)
+        
+        return resolved_icons
 
     def _print_summary(self, report: ConversionReport):
         """Print conversion summary."""

@@ -18,10 +18,9 @@ class ComposeGenerator:
         """Generate complete Compose ImageVector Kotlin code."""
         # Convert filename to PascalCase for class name
         icon_name = self.convert_to_pascal_case(class_name)
-        private_var_name = f"_{self._to_camel_case(icon_name)}"
         
-        # Generate path definitions
-        path_definitions = self._generate_all_paths(svg_data)
+        # Generate path definitions and helper methods
+        path_definitions, helper_methods = self._generate_all_paths_with_splitting(svg_data, icon_name)
         
         # Build package name with subdirectory structure
         package_name = self._build_package_name(relative_path)
@@ -33,15 +32,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.group
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
 val {icon_name}: ImageVector
     get() {{
-        if ({private_var_name} != null) {{
-            return {private_var_name}!!
-        }}
-        {private_var_name} = ImageVector.Builder(
+        if (_{icon_name} != null) return _{icon_name}!!
+        
+        _{icon_name} = ImageVector.Builder(
             name = "{icon_name}",
             defaultWidth = {svg_data.width:.1f}.dp,
             defaultHeight = {svg_data.height:.1f}.dp,
@@ -50,12 +49,53 @@ val {icon_name}: ImageVector
         ).apply {{
 {path_definitions}
         }}.build()
-        return {private_var_name}!!
+        
+        return _{icon_name}!!
     }}
 
-private var {private_var_name}: ImageVector? = null"""
+private var _{icon_name}: ImageVector? = null
+
+{helper_methods}"""
 
         return self.format_kotlin_code(kotlin_code)
+
+    def _generate_all_paths_with_splitting(self, svg_data: SVGData, icon_name: str) -> tuple[str, str]:
+        """Generate all path definitions with automatic splitting for large paths."""
+        MAX_COMMANDS_PER_METHOD = 300  # Threshold to avoid JVM method size limits
+        
+        path_codes = []
+        helper_methods = []
+        helper_counter = 0
+        
+        # Generate standalone paths
+        for path_data in svg_data.paths:
+            commands = self._parse_path_commands(path_data.d)
+            
+            if len(commands) > MAX_COMMANDS_PER_METHOD:
+                # Split large path into multiple helper methods
+                helper_calls = self._generate_split_path_methods(
+                    path_data, commands, icon_name, helper_counter, MAX_COMMANDS_PER_METHOD
+                )
+                path_codes.extend(helper_calls['calls'])
+                helper_methods.extend(helper_calls['methods'])
+                helper_counter += len(helper_calls['methods'])
+            else:
+                # Generate normal path
+                path_code = self.generate_path_code(path_data)
+                if path_code:
+                    path_codes.append(path_code)
+        
+        # Generate grouped paths (handle large groups similarly)
+        for group_data in svg_data.groups:
+            group_code = self.generate_group_code(group_data)
+            if group_code:
+                path_codes.append(group_code)
+        
+        # Join results
+        path_definitions = '\n'.join(path_codes)
+        helper_methods_str = '\n\n'.join(helper_methods) if helper_methods else ""
+        
+        return path_definitions, helper_methods_str
 
     def _generate_all_paths(self, svg_data: SVGData) -> str:
         """Generate all path definitions from SVG data."""
@@ -76,6 +116,111 @@ private var {private_var_name}: ImageVector? = null"""
         # Join all path codes with proper indentation
         return '\n'.join(path_codes)
 
+    def _generate_split_path_methods(self, path_data: PathData, commands: list, icon_name: str, 
+                                   helper_counter: int, max_commands: int) -> dict:
+        """Split a large path into multiple helper methods."""
+        # Split commands into chunks
+        command_chunks = [commands[i:i + max_commands] for i in range(0, len(commands), max_commands)]
+        
+        helper_methods = []
+        method_calls = []
+        
+        # Generate helper methods for each chunk
+        for i, chunk in enumerate(command_chunks):
+            method_name = f"build{icon_name}Path{helper_counter + i + 1}"
+            
+            # Create a temporary path data for this chunk
+            chunk_path_data = self._create_chunk_path_data(path_data, chunk)
+            
+            # Generate the helper method
+            helper_method = self._generate_path_helper_method(chunk_path_data, method_name)
+            helper_methods.append(helper_method)
+            
+            # Generate the method call
+            method_call = f"            {method_name}()"
+            method_calls.append(method_call)
+        
+        return {
+            'methods': helper_methods,
+            'calls': method_calls
+        }
+
+    def _create_chunk_path_data(self, original_path_data: PathData, commands: list) -> PathData:
+        """Create a PathData object for a chunk of commands."""
+        # Reconstruct path data string from commands
+        path_string = self._commands_to_path_string(commands)
+        
+        # Create a new PathData with the same properties but chunked path
+        import copy
+        chunk_path_data = copy.deepcopy(original_path_data)
+        chunk_path_data.d = path_string
+        
+        return chunk_path_data
+
+    def _commands_to_path_string(self, commands: list) -> str:
+        """Convert command list back to SVG path string."""
+        path_parts = []
+        
+        for command in commands:
+            if command['type'] == 'M':
+                path_parts.append(f"M {command['x']:.2f},{command['y']:.2f}")
+            elif command['type'] == 'L':
+                path_parts.append(f"L {command['x']:.2f},{command['y']:.2f}")
+            elif command['type'] == 'H':
+                path_parts.append(f"H {command['x']:.2f}")
+            elif command['type'] == 'V':
+                path_parts.append(f"V {command['y']:.2f}")
+            elif command['type'] == 'C':
+                path_parts.append(f"C {command['x1']:.2f},{command['y1']:.2f} {command['x2']:.2f},{command['y2']:.2f} {command['x']:.2f},{command['y']:.2f}")
+            elif command['type'] == 'Z':
+                path_parts.append("Z")
+                
+        return ' '.join(path_parts)
+
+    def _generate_path_helper_method(self, path_data: PathData, method_name: str) -> str:
+        """Generate a helper method for a path chunk."""
+        # Get colors and path parameters (similar to generate_path_code)
+        fill_opacity = getattr(path_data, 'fill_opacity', 1.0)
+        stroke_opacity = getattr(path_data, 'stroke_opacity', 1.0)
+        
+        fill_color = self._convert_color_to_compose_with_opacity(path_data.fill, fill_opacity)
+        stroke_color = self._convert_color_to_compose_with_opacity(path_data.stroke, stroke_opacity) if path_data.stroke != "none" else None
+        
+        # Build path parameters
+        path_params = []
+        if path_data.fill != "none" and fill_color:
+            path_params.append(f"fill = SolidColor({fill_color})")
+            
+        if path_data.fill_rule.lower() == "evenodd":
+            path_params.append(f"pathFillType = PathFillType.EvenOdd")
+        
+        if stroke_color and path_data.stroke != "none":
+            path_params.append(f"stroke = SolidColor({stroke_color})")
+            if path_data.stroke_width > 0:
+                path_params.append(f"strokeLineWidth = {path_data.stroke_width:.1f}f")
+        
+        # Format path parameters
+        if path_params:
+            param_lines = ["    path("]
+            for i, param in enumerate(path_params):
+                comma = "," if i < len(path_params) - 1 else ""
+                param_lines.append(f"        {param}{comma}")
+            param_lines.append("    ) {")
+        else:
+            param_lines = ["    path() {"]
+        
+        # Generate path commands
+        path_commands = self._format_path_data(path_data.d, 2)
+        
+        # Build complete method
+        method_lines = [f"private fun ImageVector.Builder.{method_name}() {{"]
+        method_lines.extend(param_lines)
+        method_lines.extend(path_commands)
+        method_lines.append("    }")
+        method_lines.append("}")
+        
+        return '\n'.join(method_lines)
+
     def generate_path_code(self, path_data: PathData, indent_level: int = 3) -> str:
         """Generate Compose path code from PathData."""
         if not path_data.d:
@@ -88,28 +233,40 @@ private var {private_var_name}: ImageVector? = null"""
         if path_data.fill_rule.lower() == "evenodd":
             fill_type = "PathFillType.EvenOdd"
         
-        # Convert colors
-        fill_color = self._convert_color_to_compose(path_data.fill)
-        stroke_color = self._convert_color_to_compose(path_data.stroke) if path_data.stroke != "none" else None
+        # Convert colors with opacity
+        fill_opacity = getattr(path_data, 'fill_opacity', 1.0)
+        stroke_opacity = getattr(path_data, 'stroke_opacity', 1.0)
         
-        # Build path block
-        path_lines = [f"{indent}path("]
+        fill_color = self._convert_color_to_compose_with_opacity(path_data.fill, fill_opacity)
+        stroke_color = self._convert_color_to_compose_with_opacity(path_data.stroke, stroke_opacity) if path_data.stroke != "none" else None
         
-        # Add fill color if not none
+        # Build path block with proper parameters
+        path_params = []
+        
+        # Add fill color if not none - use SolidColor wrapper
         if path_data.fill != "none" and fill_color:
-            path_lines.append(f"{indent}    fill = {fill_color},")
+            path_params.append(f"fill = SolidColor({fill_color})")
             
         # Add fill type if not default
         if path_data.fill_rule.lower() == "evenodd":
-            path_lines.append(f"{indent}    fillType = {fill_type},")
+            path_params.append(f"pathFillType = {fill_type}")
         
         # Add stroke if present
         if stroke_color and path_data.stroke != "none":
-            path_lines.append(f"{indent}    stroke = {stroke_color},")
+            path_params.append(f"stroke = SolidColor({stroke_color})")
             if path_data.stroke_width > 0:
-                path_lines.append(f"{indent}    strokeLineWidth = {path_data.stroke_width:.1f}f,")
+                path_params.append(f"strokeLineWidth = {path_data.stroke_width:.1f}f")
         
-        path_lines.append(f"{indent}) {{")
+        # Build the path opening with proper formatting
+        if path_params:
+            path_lines = [f"{indent}path("]
+            for i, param in enumerate(path_params):
+                # Add comma to all parameters except the last one
+                comma = "," if i < len(path_params) - 1 else ""
+                path_lines.append(f"{indent}    {param}{comma}")
+            path_lines.append(f"{indent}) {{")
+        else:
+            path_lines = [f"{indent}path() {{"]
         
         # Add path data with proper formatting
         formatted_path_data = self._format_path_data(path_data.d, indent_level + 1)
@@ -125,24 +282,39 @@ private var {private_var_name}: ImageVector? = null"""
             return ""
             
         indent = "    " * indent_level
-        group_lines = [f"{indent}group("]
+        group_lines = [f"{indent}group() {{"]
         
-        # Add group properties if they exist
-        if group_data.opacity < 1.0:
-            group_lines.append(f"{indent}    alpha = {group_data.opacity:.2f}f,")
-            
-        group_lines.append(f"{indent}) {{")
-        
-        # Add all child paths
+        # Add all child paths, applying group opacity to individual path colors
         for child in group_data.children:
             if isinstance(child, PathData):
-                child_code = self.generate_path_code(child, indent_level + 1)
+                # Apply group opacity to this path's colors
+                child_with_opacity = self._apply_group_opacity_to_path(child, group_data.opacity)
+                child_code = self.generate_path_code(child_with_opacity, indent_level + 1)
                 if child_code:
                     group_lines.append(child_code)
         
         group_lines.append(f"{indent}}}")
         
         return '\n'.join(group_lines)
+
+    def _apply_group_opacity_to_path(self, path_data, group_opacity: float):
+        """Apply group opacity to individual path colors."""
+        if group_opacity >= 1.0:
+            return path_data  # No opacity change needed
+        
+        # Create a copy of the path data to modify
+        import copy
+        modified_path = copy.deepcopy(path_data)
+        
+        # Apply opacity to fill color if it exists
+        if hasattr(modified_path, 'fill') and modified_path.fill != "none":
+            modified_path.fill_opacity = getattr(modified_path, 'fill_opacity', 1.0) * group_opacity
+        
+        # Apply opacity to stroke color if it exists  
+        if hasattr(modified_path, 'stroke') and modified_path.stroke != "none":
+            modified_path.stroke_opacity = getattr(modified_path, 'stroke_opacity', 1.0) * group_opacity
+            
+        return modified_path
 
     def _format_path_data(self, path_data: str, indent_level: int) -> List[str]:
         """Format SVG path data into Compose path commands."""
@@ -154,13 +326,19 @@ private var {private_var_name}: ImageVector? = null"""
         
         for command in commands:
             if command['type'] == 'M':
-                lines.append(f"{indent}moveTo({command['x']:.2f}f, {command['y']:.2f}f)")
+                lines.append(f"{indent}moveTo({command['x']:.0f}f, {command['y']:.0f}f)")
             elif command['type'] == 'L':
-                lines.append(f"{indent}lineTo({command['x']:.2f}f, {command['y']:.2f}f)")
+                lines.append(f"{indent}lineTo({command['x']:.0f}f, {command['y']:.0f}f)")
             elif command['type'] == 'H':
-                lines.append(f"{indent}horizontalLineTo({command['x']:.2f}f)")
+                if command.get('relative', False):
+                    lines.append(f"{indent}horizontalLineToRelative({command['x']:.0f}f)")
+                else:
+                    lines.append(f"{indent}horizontalLineTo({command['x']:.0f}f)")
             elif command['type'] == 'V':
-                lines.append(f"{indent}verticalLineTo({command['y']:.2f}f)")
+                if command.get('relative', False):
+                    lines.append(f"{indent}verticalLineToRelative({command['y']:.0f}f)")
+                else:
+                    lines.append(f"{indent}verticalLineTo({command['y']:.0f}f)")
             elif command['type'] == 'C':
                 lines.append(f"{indent}curveTo({command['x1']:.2f}f, {command['y1']:.2f}f, {command['x2']:.2f}f, {command['y2']:.2f}f, {command['x']:.2f}f, {command['y']:.2f}f)")
             elif command['type'] == 'S':
@@ -234,9 +412,11 @@ private var {private_var_name}: ImageVector? = null"""
                     try:
                         x = float(tokens[i])
                         if is_relative:
-                            x += current_x
-                        commands.append({'type': 'H', 'x': x})
-                        current_x = x
+                            commands.append({'type': 'H', 'x': x, 'relative': is_relative})
+                            current_x += x
+                        else:
+                            commands.append({'type': 'H', 'x': x, 'relative': is_relative})
+                            current_x = x
                         i += 1
                     except ValueError:
                         logger.warning(f"Invalid coordinate for H command: {tokens[i]}")
@@ -246,9 +426,11 @@ private var {private_var_name}: ImageVector? = null"""
                     try:
                         y = float(tokens[i])
                         if is_relative:
-                            y += current_y
-                        commands.append({'type': 'V', 'y': y})
-                        current_y = y
+                            commands.append({'type': 'V', 'y': y, 'relative': is_relative})
+                            current_y += y
+                        else:
+                            commands.append({'type': 'V', 'y': y, 'relative': is_relative})
+                            current_y = y
                         i += 1
                     except ValueError:
                         logger.warning(f"Invalid coordinate for V command: {tokens[i]}")
@@ -346,6 +528,30 @@ private var {private_var_name}: ImageVector? = null"""
             result = result + 'Icon'
         
         return result
+
+    def _convert_color_to_compose_with_opacity(self, color: str, opacity: float = 1.0) -> Optional[str]:
+        """Convert SVG color to Compose Color with opacity."""
+        if not color or color.lower() == "none":
+            return None
+            
+        # Get the base color
+        base_color = self._convert_color_to_compose(color)
+        if not base_color:
+            return None
+            
+        # If opacity is 1.0, return base color as-is
+        if opacity >= 1.0:
+            return base_color
+            
+        # Apply opacity to the color
+        if base_color.startswith("Color(0xFF"):
+            # Extract hex value and apply alpha
+            hex_part = base_color[10:-1]  # Remove "Color(0xFF" and ")"
+            alpha_hex = format(int(opacity * 255), '02X')
+            return f"Color(0x{alpha_hex}{hex_part})"
+        else:
+            # For named colors, use copy(alpha = x)
+            return f"{base_color}.copy(alpha = {opacity:.2f}f)"
 
     def _to_camel_case(self, pascal_case: str) -> str:
         """Convert PascalCase to camelCase."""

@@ -105,7 +105,9 @@ class FileProcessor:
             # Calculate relative path from input_dir to input_path
             try:
                 relative_path = input_path.relative_to(self.input_dir)
-                output_path = self.output_dir / relative_path.parent
+                # Normalize directory structure to match package naming convention
+                normalized_dir_path = self._normalize_directory_path(relative_path.parent)
+                output_path = self.output_dir / normalized_dir_path
             except ValueError:
                 # input_path is not relative to input_dir
                 output_path = self.output_dir
@@ -152,8 +154,11 @@ class FileProcessor:
             pascal_case_name = self._convert_to_pascal_case(relative_path.stem)
             kotlin_filename = pascal_case_name + '.kt'
             
+            # Normalize directory structure to match package naming convention
+            normalized_dir_path = self._normalize_directory_path(relative_path.parent)
+            
             # Build full output path
-            output_path = self.output_dir / relative_path.parent / kotlin_filename
+            output_path = self.output_dir / normalized_dir_path / kotlin_filename
             
             return output_path
             
@@ -208,6 +213,30 @@ class FileProcessor:
             result = result + "Icon"
         
         return result
+
+    def _normalize_directory_path(self, dir_path: Path) -> Path:
+        """Normalize directory path to match package naming convention."""
+        import re
+        
+        if not dir_path or str(dir_path) == '.':
+            return Path('.')
+        
+        # Convert all directory parts to lowercase and normalize
+        normalized_parts = []
+        for part in dir_path.parts:
+            if part:  # Skip empty parts
+                # Normalize package segment (replace special chars with underscores, convert to lowercase)
+                normalized_part = re.sub(r'[^a-zA-Z0-9]', '_', part.lower())
+                if normalized_part and not normalized_part[0].isdigit():
+                    normalized_parts.append(normalized_part)
+                elif normalized_part and normalized_part[0].isdigit():
+                    # If starts with digit, prefix with 'dir_'
+                    normalized_parts.append('dir_' + normalized_part)
+        
+        if normalized_parts:
+            return Path(*normalized_parts)
+        else:
+            return Path('.')
 
     def clean_output_directory(self, confirm: bool = False) -> bool:
         """Clean output directory of existing files."""
